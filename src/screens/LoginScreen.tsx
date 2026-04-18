@@ -1,6 +1,6 @@
-import { Video, ResizeMode } from "expo-av";
+import { VideoView, useVideoPlayer } from "expo-video";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -18,7 +18,14 @@ export function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const videoRef = useRef<Video>(null);
+  const player = useVideoPlayer(
+    "https://cdn.coverr.co/videos/coverr-pouring-recycled-materials-2421/1080p.mp4",
+    (p) => {
+      p.loop = true;
+      p.muted = true;
+      p.play();
+    },
+  );
 
   const canSubmit = useMemo(() => email.trim().length > 3 && password.length >= 6, [email, password]);
 
@@ -57,14 +64,11 @@ export function LoginScreen() {
       style={styles.container}
     >
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <Video
-          ref={videoRef}
-          source={{ uri: "https://cdn.coverr.co/videos/coverr-pouring-recycled-materials-2421/1080p.mp4" }}
+        <VideoView
+          player={player}
           style={StyleSheet.absoluteFill}
-          resizeMode={ResizeMode.COVER}
-          isLooping
-          shouldPlay
-          isMuted
+          contentFit="cover"
+          nativeControls={false}
         />
         <LinearGradient
           colors={["rgba(7,11,21,0.35)", "rgba(7,11,21,0.85)", colors.bg]}
