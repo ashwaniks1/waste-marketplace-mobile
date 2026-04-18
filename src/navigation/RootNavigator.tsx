@@ -3,17 +3,13 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import React from "react";
 import { useSession } from "../providers/SessionProvider";
 import { LoginScreen } from "../screens/LoginScreen";
-import { BuyerDashboardScreen } from "../screens/buyer/BuyerDashboardScreen";
-import { SellerDashboardScreen } from "../screens/seller/SellerDashboardScreen";
-import { DriverDashboardScreen } from "../screens/driver/DriverDashboardScreen";
 import { RoleLoadingScreen } from "../screens/RoleLoadingScreen";
+import { RoleTabs } from "./RoleTabs";
 
 export type RootStackParamList = {
   Login: undefined;
   RoleLoading: undefined;
-  BuyerDashboard: undefined;
-  SellerDashboard: undefined;
-  DriverDashboard: undefined;
+  App: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -23,7 +19,7 @@ export function RootNavigator() {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
         {state.status === "loading" ? (
           <Stack.Screen
             name="RoleLoading"
@@ -31,25 +27,9 @@ export function RootNavigator() {
             options={{ headerShown: false }}
           />
         ) : state.status === "signed_out" ? (
-          <Stack.Screen name="Login" component={LoginScreen} options={{ title: "Sign in" }} />
-        ) : state.role === "buyer" ? (
-          <Stack.Screen
-            name="BuyerDashboard"
-            component={BuyerDashboardScreen}
-            options={{ title: "Buyer" }}
-          />
-        ) : state.role === "driver" ? (
-          <Stack.Screen
-            name="DriverDashboard"
-            component={DriverDashboardScreen}
-            options={{ title: "Driver" }}
-          />
+          <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
         ) : (
-          <Stack.Screen
-            name="SellerDashboard"
-            component={SellerDashboardScreen}
-            options={{ title: "Seller" }}
-          />
+          <Stack.Screen name="App" component={RoleTabs} />
         )}
       </Stack.Navigator>
     </NavigationContainer>
