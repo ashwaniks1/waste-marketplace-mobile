@@ -1,0 +1,5 @@
+# Rename to smoke.yaml and set appId to your dev client bundle id.
+appId: com.yourorg.wastemarketplace
+---
+- launchApp
+- assertVisible: "Sign in"

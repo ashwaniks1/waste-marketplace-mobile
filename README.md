@@ -16,6 +16,7 @@ cp .env.example .env
 2. Fill in:
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+- `EXPO_PUBLIC_APP_API_URL` — your deployed Next.js origin (no trailing slash), used for `POST /api/ensure-profile` (secure profile provisioning).
 
 3. Run:
 
