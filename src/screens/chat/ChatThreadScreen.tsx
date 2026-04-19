@@ -34,6 +34,7 @@ export function ChatThreadScreen() {
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState("");
   const canSend = useMemo(() => text.trim().length > 0, [text]);
+  const [profiles, setProfiles] = useState<Record<string, { name: string | null }>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -78,6 +79,24 @@ export function ChatThreadScreen() {
     };
   }, [conversationId]);
 
+  useEffect(() => {
+    const ids = [...new Set(items.map((m) => m.sender_id))];
+    if (!ids.length) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from("user_public_profiles").select("id,name").in("id", ids);
+      if (cancelled) return;
+      const next: Record<string, { name: string | null }> = {};
+      for (const p of (data as { id: string; name: string | null }[] | null) ?? []) {
+        next[p.id] = { name: p.name };
+      }
+      setProfiles((prev) => ({ ...prev, ...next }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [items]);
+
   async function send() {
     if (!userId || !canSend) return;
     const body = text.trim();
@@ -116,10 +135,25 @@ export function ChatThreadScreen() {
         contentContainerStyle={{ padding: 16, gap: 10 }}
         renderItem={({ item }) => {
           const mine = item.sender_id === userId;
+          const name = profiles[item.sender_id]?.name ?? "User";
+          const initial = name.slice(0, 1).toUpperCase();
           return (
-            <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-              <Text style={[styles.body, mine ? styles.bodyMine : styles.bodyTheirs]}>{item.body}</Text>
-              <Text style={styles.time}>{new Date(item.created_at).toLocaleTimeString()}</Text>
+            <View style={[styles.row, { alignSelf: mine ? "flex-end" : "flex-start" }]}>
+              {!mine ? (
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{initial}</Text>
+                </View>
+              ) : null}
+              <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                {!mine ? <Text style={styles.sender}>{name}</Text> : null}
+                <Text style={[styles.body, mine ? styles.bodyMine : styles.bodyTheirs]}>{item.body}</Text>
+                <Text style={styles.time}>{new Date(item.created_at).toLocaleTimeString()}</Text>
+              </View>
+              {mine ? (
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>Me</Text>
+                </View>
+              ) : null}
             </View>
           );
         }}
@@ -147,9 +181,23 @@ const styles = StyleSheet.create({
   muted: { opacity: 0.65, textAlign: "center" },
   errorBar: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "rgba(255,91,110,0.12)" },
   errorText: { color: "#B00020", fontWeight: "800" },
-  bubble: { maxWidth: "85%", borderRadius: 16, padding: 12, borderWidth: StyleSheet.hairlineWidth },
-  bubbleMine: { alignSelf: "flex-end", backgroundColor: "rgba(91,140,255,0.10)", borderColor: "rgba(91,140,255,0.35)" },
-  bubbleTheirs: { alignSelf: "flex-start", backgroundColor: "rgba(0,0,0,0.04)", borderColor: "rgba(0,0,0,0.10)" },
+  row: { flexDirection: "row", alignItems: "flex-end", gap: 10, maxWidth: "100%" },
+  avatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.06)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(0,0,0,0.10)",
+    marginBottom: 2,
+  },
+  avatarText: { fontSize: 10, fontWeight: "900", color: "rgba(0,0,0,0.65)" },
+  bubble: { maxWidth: "78%", borderRadius: 16, padding: 12, borderWidth: StyleSheet.hairlineWidth },
+  bubbleMine: { backgroundColor: "rgba(91,140,255,0.10)", borderColor: "rgba(91,140,255,0.35)" },
+  bubbleTheirs: { backgroundColor: "rgba(0,0,0,0.04)", borderColor: "rgba(0,0,0,0.10)" },
+  sender: { color: "rgba(0,0,0,0.55)", fontSize: 12, fontWeight: "900", marginBottom: 6 },
   body: { fontSize: 15 },
   bodyMine: { fontWeight: "700" },
   bodyTheirs: { fontWeight: "600" },

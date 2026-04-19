@@ -1,12 +1,14 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSession } from "../providers/SessionProvider";
 
 export function SettingsScreen() {
   const { state, signOut } = useSession();
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: 12 + insets.top }]}>
       <Text style={styles.title}>Settings</Text>
       <Text style={styles.sub}>
         Signed in as:{" "}
