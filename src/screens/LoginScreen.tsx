@@ -1,3 +1,5 @@
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useMemo, useState } from "react";
@@ -12,9 +14,14 @@ import {
   View,
 } from "react-native";
 import { supabase } from "../lib/supabase";
+import type { RootStackParamList } from "../navigation/types";
 import { colors } from "../ui/theme";
+import { validateEmail } from "../utils/profileValidation";
+
+type LoginNav = NativeStackNavigationProp<RootStackParamList, "Login">;
 
 export function LoginScreen() {
+  const navigation = useNavigation<LoginNav>();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -27,9 +34,14 @@ export function LoginScreen() {
     },
   );
 
-  const canSubmit = useMemo(() => email.trim().length > 3 && password.length >= 6, [email, password]);
+  const canSubmit = useMemo(() => !validateEmail(email) && password.length >= 6, [email, password]);
 
   async function signIn() {
+    const em = validateEmail(email);
+    if (em) {
+      Alert.alert("Invalid email", em);
+      return;
+    }
     if (!canSubmit || busy) return;
     setBusy(true);
     try {
@@ -38,21 +50,6 @@ export function LoginScreen() {
         password,
       });
       if (error) Alert.alert("Sign in failed", error.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function signUp() {
-    if (!canSubmit || busy) return;
-    setBusy(true);
-    try {
-      const { error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-      });
-      if (error) Alert.alert("Sign up failed", error.message);
-      else Alert.alert("Check your email", "If email confirmation is enabled, confirm your email then sign in.");
     } finally {
       setBusy(false);
     }
@@ -135,7 +132,7 @@ export function LoginScreen() {
           </LinearGradient>
         </Pressable>
 
-        <Pressable onPress={signUp} disabled={!canSubmit || busy} style={styles.secondaryButton}>
+        <Pressable onPress={() => navigation.navigate("SignUp")} style={styles.secondaryButton}>
           <Text style={styles.secondaryButtonText}>Create account</Text>
         </Pressable>
 

@@ -16,7 +16,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "We use your location to show nearby pickup and delivery jobs.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Drivers share location during active deliveries to enable live tracking and accurate ETAs."
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Drivers share location during active deliveries to enable live tracking and accurate ETAs.",
+        "NSPhotoLibraryUsageDescription": "Choose a profile photo so buyers and sellers recognize you in chat."
       }
     },
     "android": {
@@ -31,7 +32,12 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-video"
+      [
+        "expo-notifications",
+        {
+          "color": "#23D5AB"
+        }
+      ]
     ]
   }
 }

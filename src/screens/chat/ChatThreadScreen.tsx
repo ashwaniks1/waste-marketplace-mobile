@@ -1,5 +1,5 @@
-import { type RouteProp, useRoute } from "@react-navigation/native";
-import React, { useEffect, useMemo, useState } from "react";
+import { type RouteProp, useFocusEffect, useRoute } from "@react-navigation/native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -11,9 +11,14 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { markConversationRead } from "../../lib/chatReadState";
+import { notifyChatUnreadChanged } from "../../lib/chatUnreadBus";
+import { randomUuid } from "../../lib/randomUuid";
 import { supabase } from "../../lib/supabase";
 import type { ChatStackParamList } from "../../navigation/chat/ChatStack";
 import { useSession } from "../../providers/SessionProvider";
+import { useTimeZone } from "../../providers/TimezoneProvider";
+import { GradientScreen } from "../../ui/GradientScreen";
 
 type MessageRow = {
   id: string;
@@ -27,8 +32,16 @@ export function ChatThreadScreen() {
   const route = useRoute<RouteProp<ChatStackParamList, "ChatThread">>();
   const { state } = useSession();
   const userId = state.status === "signed_in" ? state.session.user.id : null;
+  const { formatTime } = useTimeZone();
 
   const conversationId = route.params.conversationId;
+  useFocusEffect(
+    useCallback(() => {
+      void markConversationRead(conversationId);
+      notifyChatUnreadChanged();
+    }, [conversationId]),
+  );
+
   const [items, setItems] = useState<MessageRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +115,7 @@ export function ChatThreadScreen() {
     const body = text.trim();
     setText("");
     const { error } = await supabase.from("messages").insert({
+      id: randomUuid(),
       conversation_id: conversationId,
       sender_id: userId,
       body,
@@ -109,78 +123,83 @@ export function ChatThreadScreen() {
     if (error) {
       setText(body);
       setError(error.message);
+    } else {
+      await markConversationRead(conversationId);
+      notifyChatUnreadChanged();
     }
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.select({ ios: "padding", android: undefined })}
-      keyboardVerticalOffset={Platform.select({ ios: 90, android: 0 })}
-    >
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator />
-          <Text style={styles.muted}>Loading…</Text>
-        </View>
-      ) : error ? (
-        <View style={styles.errorBar}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : null}
+    <GradientScreen decorated style={{ flex: 1 }}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.select({ ios: "padding", android: undefined })}
+        keyboardVerticalOffset={Platform.select({ ios: 90, android: 0 })}
+      >
+        {loading ? (
+          <View style={styles.center}>
+            <ActivityIndicator color="#bfffea" />
+            <Text style={styles.muted}>Loading…</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorBar}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
 
-      <FlatList
-        data={items}
-        keyExtractor={(x) => x.id}
-        contentContainerStyle={{ padding: 16, gap: 10 }}
-        renderItem={({ item }) => {
-          const mine = item.sender_id === userId;
-          const name = profiles[item.sender_id]?.name ?? "User";
-          const initial = name.slice(0, 1).toUpperCase();
-          return (
-            <View style={[styles.row, { alignSelf: mine ? "flex-end" : "flex-start" }]}>
-              {!mine ? (
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{initial}</Text>
+        <FlatList
+          data={items}
+          keyExtractor={(x) => x.id}
+          contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 8 }}
+          renderItem={({ item }) => {
+            const mine = item.sender_id === userId;
+            const name = profiles[item.sender_id]?.name ?? "User";
+            const initial = name.slice(0, 1).toUpperCase();
+            return (
+              <View style={[styles.row, { alignSelf: mine ? "flex-end" : "flex-start" }]}>
+                {!mine ? (
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{initial}</Text>
+                  </View>
+                ) : null}
+                <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                  {!mine ? <Text style={styles.sender}>{name}</Text> : null}
+                  <Text style={[styles.body, mine ? styles.bodyMine : styles.bodyTheirs]}>{item.body}</Text>
+                  <Text style={styles.time}>{formatTime(item.created_at)}</Text>
                 </View>
-              ) : null}
-              <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-                {!mine ? <Text style={styles.sender}>{name}</Text> : null}
-                <Text style={[styles.body, mine ? styles.bodyMine : styles.bodyTheirs]}>{item.body}</Text>
-                <Text style={styles.time}>{new Date(item.created_at).toLocaleTimeString()}</Text>
+                {mine ? (
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>Me</Text>
+                  </View>
+                ) : null}
               </View>
-              {mine ? (
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>Me</Text>
-                </View>
-              ) : null}
-            </View>
-          );
-        }}
-      />
-
-      <View style={styles.composer}>
-        <TextInput
-          value={text}
-          onChangeText={setText}
-          placeholder="Message…"
-          placeholderTextColor="rgba(0,0,0,0.45)"
-          style={styles.input}
+            );
+          }}
         />
-        <Pressable onPress={send} disabled={!canSend} style={[styles.send, !canSend && styles.sendDisabled]}>
-          <Text style={styles.sendText}>Send</Text>
-        </Pressable>
-      </View>
-    </KeyboardAvoidingView>
+
+        <View style={styles.composer}>
+          <TextInput
+            value={text}
+            onChangeText={setText}
+            placeholder="Message…"
+            placeholderTextColor="rgba(255,255,255,0.45)"
+            style={styles.input}
+          />
+          <Pressable onPress={send} disabled={!canSend} style={[styles.send, !canSend && styles.sendDisabled]}>
+            <Text style={styles.sendText}>Send</Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </GradientScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "white" },
+  flex: { flex: 1 },
   center: { paddingTop: 30, alignItems: "center", gap: 10 },
-  muted: { opacity: 0.65, textAlign: "center" },
-  errorBar: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "rgba(255,91,110,0.12)" },
-  errorText: { color: "#B00020", fontWeight: "800" },
+  muted: { color: "rgba(255,255,255,0.65)", textAlign: "center", fontWeight: "600" },
+  errorBar: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "rgba(255,91,110,0.2)" },
+  errorText: { color: "#FFB4BD", fontWeight: "800" },
   row: { flexDirection: "row", alignItems: "flex-end", gap: 10, maxWidth: "100%" },
   avatar: {
     width: 34,
@@ -188,36 +207,38 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.06)",
+    backgroundColor: "rgba(255,255,255,0.1)",
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(0,0,0,0.10)",
+    borderColor: "rgba(255,255,255,0.18)",
     marginBottom: 2,
   },
-  avatarText: { fontSize: 10, fontWeight: "900", color: "rgba(0,0,0,0.65)" },
+  avatarText: { fontSize: 10, fontWeight: "900", color: "rgba(255,255,255,0.85)" },
   bubble: { maxWidth: "78%", borderRadius: 16, padding: 12, borderWidth: StyleSheet.hairlineWidth },
-  bubbleMine: { backgroundColor: "rgba(91,140,255,0.10)", borderColor: "rgba(91,140,255,0.35)" },
-  bubbleTheirs: { backgroundColor: "rgba(0,0,0,0.04)", borderColor: "rgba(0,0,0,0.10)" },
-  sender: { color: "rgba(0,0,0,0.55)", fontSize: 12, fontWeight: "900", marginBottom: 6 },
+  bubbleMine: { backgroundColor: "rgba(91,140,255,0.35)", borderColor: "rgba(91,140,255,0.55)" },
+  bubbleTheirs: { backgroundColor: "rgba(0,0,0,0.28)", borderColor: "rgba(255,255,255,0.14)" },
+  sender: { color: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: "900", marginBottom: 6 },
   body: { fontSize: 15 },
-  bodyMine: { fontWeight: "700" },
-  bodyTheirs: { fontWeight: "600" },
-  time: { marginTop: 6, opacity: 0.5, fontSize: 11 },
+  bodyMine: { fontWeight: "700", color: "white" },
+  bodyTheirs: { fontWeight: "600", color: "rgba(255,255,255,0.92)" },
+  time: { marginTop: 6, color: "rgba(255,255,255,0.45)", fontSize: 11 },
   composer: {
     flexDirection: "row",
     gap: 10,
     padding: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(0,0,0,0.12)",
+    borderTopColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(0,0,0,0.2)",
   },
   input: {
     flex: 1,
     borderRadius: 14,
-    backgroundColor: "rgba(0,0,0,0.04)",
+    backgroundColor: "rgba(0,0,0,0.35)",
     paddingHorizontal: 12,
     paddingVertical: 10,
+    color: "white",
+    fontWeight: "600",
   },
-  send: { paddingHorizontal: 14, borderRadius: 14, backgroundColor: "#111A2E", justifyContent: "center" },
+  send: { paddingHorizontal: 14, borderRadius: 14, backgroundColor: "rgba(35,213,171,0.95)", justifyContent: "center" },
   sendDisabled: { opacity: 0.5 },
-  sendText: { color: "white", fontWeight: "900" },
+  sendText: { color: "#04120E", fontWeight: "900" },
 });
-

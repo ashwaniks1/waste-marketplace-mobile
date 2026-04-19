@@ -20,31 +20,55 @@ export type PublicListingRow = {
   seller_name: string | null;
   seller_avatar_url: string | null;
   created_at?: string;
+  title?: string | null;
+  description?: string | null;
   driver_commission_amount?: string | number | null;
   driver_commission_percent?: string | number | null;
   commission_kind?: string | null;
+  delivery_privacy_locked?: boolean | null;
+  buyer_delivery_confirmed?: boolean | null;
 };
+
+/** Street-level pickup line for feed cards (driver privacy + buyer release gate). */
+export function listingAddressForDriverCard(item: PublicListingRow): string {
+  if (item.delivery_privacy_locked) {
+    return "Pickup address is hidden after verified delivery. Use in-app chat.";
+  }
+  if (item.delivery_required && !item.buyer_delivery_confirmed) {
+    return "Full address unlocks after the buyer releases this pickup to drivers.";
+  }
+  return item.address;
+}
 
 export function MarketListingCard({
   item,
   distanceMiles,
   sellerRating,
   onPress,
+  addressLine,
 }: {
   item: PublicListingRow;
   distanceMiles: number | null;
   sellerRating: { avg: number; count: number } | null;
   onPress: () => void;
+  /** When set (e.g. driver feed), overrides raw `item.address` for privacy. */
+  addressLine?: string;
 }) {
   const cover = item.images?.[0];
-  const title = item.waste_type.replaceAll("_", " ");
+  const headline = item.title?.trim() || item.waste_type.replaceAll("_", " ");
+  const subline = item.title?.trim() ? `${item.waste_type.replaceAll("_", " ")} · ${item.quantity}` : item.quantity;
   const ratingLabel =
     sellerRating && sellerRating.count > 0
       ? `${sellerRating.avg.toFixed(1)} (${sellerRating.count})`
       : "New seller";
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.press, pressed && { transform: [{ scale: 0.99 }] }]}>
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      android_ripple={{ color: "rgba(255,255,255,0.12)" }}
+      style={({ pressed }) => [styles.press, pressed && { transform: [{ scale: 0.99 }] }]}
+    >
       <GlassCard style={styles.card}>
         <View style={styles.hero}>
           {cover ? <Image source={{ uri: cover }} style={styles.cover} /> : <View style={styles.coverFallback} />}
@@ -58,14 +82,14 @@ export function MarketListingCard({
               <Text style={styles.pillText}>{item.status}</Text>
             </View>
           </View>
-          <Text style={styles.heroTitle}>{title}</Text>
-          <Text style={styles.heroSub}>{item.quantity}</Text>
+          <Text style={styles.heroTitle}>{headline}</Text>
+          <Text style={styles.heroSub}>{subline}</Text>
         </View>
 
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
             <Text style={styles.addr} numberOfLines={2}>
-              {item.address}
+              {addressLine ?? item.address}
             </Text>
             <View style={styles.metaRow}>
               <Ionicons name="navigate-outline" size={14} color="rgba(255,255,255,0.75)" />
@@ -97,7 +121,7 @@ export function MarketListingCard({
 }
 
 const styles = StyleSheet.create({
-  press: { marginBottom: 12 },
+  press: { marginBottom: 12, minHeight: 120 },
   card: { padding: 0, overflow: "hidden" },
   hero: { height: 132, padding: 12, justifyContent: "flex-end" },
   cover: { ...StyleSheet.absoluteFillObject },

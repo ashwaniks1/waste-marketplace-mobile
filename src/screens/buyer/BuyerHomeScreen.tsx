@@ -30,6 +30,7 @@ export function BuyerHomeScreen() {
   const [wasteType, setWasteType] = useState<string | null>(null);
   const [sort, setSort] = useState<"nearest" | "newest">("newest");
   const [ratings, setRatings] = useState<Record<string, { avg: number; count: number }>>({});
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -104,39 +105,61 @@ export function BuyerHomeScreen() {
     return scored;
   }, [items, miles, point, sort, wasteType]);
 
+  const filterSummary = useMemo(() => {
+    const mileLabel = MILES.find((m) => m.value === miles)?.label ?? "Any";
+    const mat = wasteType ?? "All materials";
+    const ord = sort === "nearest" ? "Nearest" : "Newest";
+    return `${mileLabel} · ${mat} · ${ord}`;
+  }, [miles, wasteType, sort]);
+
   return (
-    <GradientScreen>
+    <GradientScreen decorated>
       <View style={styles.header}>
         <Text style={styles.title}>Nearby listings</Text>
         <Text style={styles.sub}>Premium marketplace feed with distance + trust signals.</Text>
       </View>
 
-      <GlassCard style={{ marginHorizontal: 16, marginBottom: 12 }}>
-        <Text style={styles.cardTitle}>Filters</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 10 }}>
-          {MILES.map((m) => {
-            const active = miles === m.value;
-            return (
-              <Pressable key={m.label} onPress={() => setMiles(m.value)} style={[styles.chip, active && styles.chipActive]}>
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{m.label}</Text>
+      <GlassCard style={{ marginHorizontal: 16, marginBottom: 12, paddingVertical: 4 }}>
+        <Pressable
+          onPress={() => setFiltersOpen((o) => !o)}
+          style={styles.filterHeader}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: filtersOpen }}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardTitle}>Filters</Text>
+            {!filtersOpen ? <Text style={styles.filterSummary}>{filterSummary}</Text> : null}
+          </View>
+          <Ionicons name={filtersOpen ? "chevron-up" : "chevron-down"} size={22} color="rgba(255,255,255,0.75)" />
+        </Pressable>
+        {filtersOpen ? (
+          <>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 10 }}>
+              {MILES.map((m) => {
+                const active = miles === m.value;
+                return (
+                  <Pressable key={m.label} onPress={() => setMiles(m.value)} style={[styles.chip, active && styles.chipActive]}>
+                    <Text style={[styles.chipText, active && styles.chipTextActive]}>{m.label}</Text>
+                  </Pressable>
+                );
+              })}
+              <Pressable onPress={() => setSort(sort === "nearest" ? "newest" : "nearest")} style={styles.chip}>
+                <Ionicons name="swap-vertical" size={14} color="white" />
+                <Text style={styles.chipText}>{sort === "nearest" ? "Nearest" : "Newest"}</Text>
               </Pressable>
-            );
-          })}
-          <Pressable onPress={() => setSort(sort === "nearest" ? "newest" : "nearest")} style={styles.chip}>
-            <Ionicons name="swap-vertical" size={14} color="white" />
-            <Text style={styles.chipText}>{sort === "nearest" ? "Nearest" : "Newest"}</Text>
-          </Pressable>
-        </ScrollView>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 6 }}>
-          {["PLASTIC", "METAL", "CARDBOARD", "PAPER", "GLASS"].map((wt) => {
-            const active = wasteType === wt;
-            return (
-              <Pressable key={wt} onPress={() => setWasteType(active ? null : wt)} style={[styles.chip, active && styles.chipActive]}>
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{wt}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+            </ScrollView>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 10 }}>
+              {["PLASTIC", "METAL", "CARDBOARD", "PAPER", "GLASS"].map((wt) => {
+                const active = wasteType === wt;
+                return (
+                  <Pressable key={wt} onPress={() => setWasteType(active ? null : wt)} style={[styles.chip, active && styles.chipActive]}>
+                    <Text style={[styles.chipText, active && styles.chipTextActive]}>{wt}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </>
+        ) : null}
       </GlassCard>
 
       {loading ? <Text style={styles.center}>Loading…</Text> : null}
@@ -147,6 +170,14 @@ export function BuyerHomeScreen() {
         data={filtered.map((x) => x.r)}
         keyExtractor={(x) => x.id}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
+        ListEmptyComponent={
+          !loading && !error ? (
+            <GlassCard style={{ padding: 20 }}>
+              <Text style={styles.emptyTitle}>No listings match</Text>
+              <Text style={styles.emptySub}>Try widening distance, clearing the material filter, or checking back later.</Text>
+            </GlassCard>
+          ) : null
+        }
         renderItem={({ item }) => {
           const d =
             point && item.latitude != null && item.longitude != null
@@ -172,6 +203,14 @@ const styles = StyleSheet.create({
   title: { color: "white", fontSize: 26, fontWeight: "900" },
   sub: { color: "rgba(255,255,255,0.65)", marginTop: 8, fontWeight: "600", lineHeight: 18 },
   cardTitle: { color: "white", fontWeight: "900" },
+  filterHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+  filterSummary: { color: "rgba(255,255,255,0.55)", marginTop: 6, fontWeight: "700", fontSize: 12 },
   chip: {
     flexDirection: "row",
     alignItems: "center",
@@ -188,4 +227,6 @@ const styles = StyleSheet.create({
   chipTextActive: { color: "white" },
   center: { color: "rgba(255,255,255,0.7)", textAlign: "center", paddingVertical: 10 },
   err: { color: "#FFB4BD", textAlign: "center", paddingVertical: 10, fontWeight: "800" },
+  emptyTitle: { color: "white", fontWeight: "900", fontSize: 16 },
+  emptySub: { color: "rgba(255,255,255,0.65)", marginTop: 8, fontWeight: "600", lineHeight: 18 },
 });

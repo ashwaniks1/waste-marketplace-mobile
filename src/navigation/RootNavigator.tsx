@@ -4,13 +4,9 @@ import React from "react";
 import { useSession } from "../providers/SessionProvider";
 import { LoginScreen } from "../screens/LoginScreen";
 import { RoleLoadingScreen } from "../screens/RoleLoadingScreen";
+import { SignUpScreen } from "../screens/SignUpScreen";
 import { RoleTabs } from "./RoleTabs";
-
-export type RootStackParamList = {
-  Login: undefined;
-  RoleLoading: undefined;
-  App: undefined;
-};
+import type { RootStackParamList } from "./types";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -27,7 +23,10 @@ export function RootNavigator() {
             options={{ headerShown: false }}
           />
         ) : state.status === "signed_out" ? (
-          <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+          <Stack.Group>
+            <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="SignUp" component={SignUpScreen} options={{ headerShown: false }} />
+          </Stack.Group>
         ) : (
           <Stack.Screen name="App" component={RoleTabs} />
         )}

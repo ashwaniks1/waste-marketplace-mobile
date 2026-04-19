@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { type RouteProp, useRoute } from "@react-navigation/native";
 import React, { useEffect, useMemo, useState } from "react";
-import { FlatList, StyleSheet, Text, View } from "react-native";
+import { FlatList, Image, StyleSheet, Text, View } from "react-native";
 import { supabase } from "../../lib/supabase";
 import type { BuyerHomeStackParamList } from "../../navigation/home/BuyerHomeStack";
 import type { DriverHomeStackParamList } from "../../navigation/home/DriverHomeStack";
 import type { SellerHomeStackParamList } from "../../navigation/home/SellerHomeStack";
+import { useSession } from "../../providers/SessionProvider";
 import { GlassCard } from "../../ui/GlassCard";
 import { GradientScreen } from "../../ui/GradientScreen";
 
@@ -16,9 +17,15 @@ type ReviewRow = { id: string; score: number; body: string | null; created_at: s
 export function PublicProfileScreen() {
   const route = useRoute<AnyRoute>();
   const id = route.params.id;
+  const { state } = useSession();
+  const me = state.status === "signed_in" ? state.session.user.id : null;
+  const role = state.status === "signed_in" ? state.role : null;
+  const isSelf = Boolean(me && me === id);
 
   const [profile, setProfile] = useState<any | null>(null);
+  const [privateRow, setPrivateRow] = useState<{ phone: string | null; email: string; address: string | null } | null>(null);
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
+  const [profileRestricted, setProfileRestricted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,22 +47,43 @@ export function PublicProfileScreen() {
         .eq("to_user_id", id)
         .order("created_at", { ascending: false })
         .limit(50);
+      type PrivateRow = { phone: string | null; email: string; address: string | null };
+      let priv: PrivateRow | null = null;
+      if (me === id) {
+        const { data: u } = await supabase.from("users").select("phone,email,address").eq("id", id).maybeSingle();
+        if (u && typeof (u as PrivateRow).email === "string") {
+          priv = { phone: (u as PrivateRow).phone ?? null, email: (u as PrivateRow).email, address: (u as PrivateRow).address ?? null };
+        }
+      }
+      let restricted = false;
+      if (role === "driver" && me && me !== id) {
+        const { data: blk } = await supabase
+          .from("driver_profile_blocks")
+          .select("listing_id")
+          .eq("driver_id", me)
+          .eq("blocked_user_id", id)
+          .maybeSingle();
+        restricted = Boolean(blk);
+      }
+
       if (cancelled) return;
       if (e1) setError(e1.message);
       if (e2) setError(e2.message);
       setProfile(p);
+      setPrivateRow(priv);
+      setProfileRestricted(restricted);
       setReviews((rs as ReviewRow[]) ?? []);
       setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, me, role]);
 
   return (
-    <GradientScreen>
+    <GradientScreen decorated>
       <FlatList
-        data={reviews}
+        data={profileRestricted ? [] : reviews}
         keyExtractor={(x) => x.id}
         contentContainerStyle={{ padding: 16, paddingBottom: 28, gap: 12 }}
         ListHeaderComponent={
@@ -64,25 +92,61 @@ export function PublicProfileScreen() {
             {error ? <Text style={styles.err}>{error}</Text> : null}
             <GlassCard>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{(profile?.name ?? "?").slice(0, 1).toUpperCase()}</Text>
-                </View>
+                {profile?.avatar_url ? (
+                  <Image source={{ uri: profile.avatar_url }} style={styles.avatarImg} />
+                ) : (
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{(profile?.name ?? "?").slice(0, 1).toUpperCase()}</Text>
+                  </View>
+                )}
                 <View style={{ flex: 1 }}>
                   <Text style={styles.name}>{profile?.name ?? "User"}</Text>
                   <Text style={styles.muted}>Role: {String(profile?.role ?? "—")}</Text>
-                  <View style={styles.ratingRow}>
-                    <Ionicons name="star" size={16} color="#FFD36A" />
-                    <Text style={styles.ratingText}>{avg ? `${avg.toFixed(1)} avg` : "No reviews yet"}</Text>
-                    <Text style={styles.muted}> • {reviews.length} reviews</Text>
-                  </View>
+                  {profileRestricted ? (
+                    <Text style={[styles.muted, { marginTop: 8 }]}>
+                      Location and vehicle details are hidden after a completed delivery you drove. Use in-app chat for coordination.
+                    </Text>
+                  ) : (
+                    <>
+                      {profile?.zip_code ? (
+                        <Text style={[styles.muted, { marginTop: 6 }]}>
+                          <Ionicons name="location-outline" size={14} color="rgba(255,255,255,0.65)" /> ZIP:{" "}
+                          {profile.zip_code}
+                        </Text>
+                      ) : null}
+                      {profile?.vehicle_type ? (
+                        <Text style={[styles.muted, { marginTop: 4 }]}>
+                          <Ionicons name="car-outline" size={14} color="rgba(255,255,255,0.65)" /> {profile.vehicle_type}
+                        </Text>
+                      ) : null}
+                      <View style={styles.ratingRow}>
+                        <Ionicons name="star" size={16} color="#FFD36A" />
+                        <Text style={styles.ratingText}>{avg ? `${avg.toFixed(1)} avg` : "No reviews yet"}</Text>
+                        <Text style={styles.muted}> • {reviews.length} reviews</Text>
+                      </View>
+                    </>
+                  )}
                 </View>
               </View>
             </GlassCard>
+            {isSelf && privateRow ? (
+              <GlassCard>
+                <Text style={styles.section}>Contact (only visible to you)</Text>
+                <Text style={styles.muted}>Email: {privateRow.email}</Text>
+                <Text style={[styles.muted, { marginTop: 6 }]}>Phone: {privateRow.phone ?? "—"}</Text>
+                <Text style={[styles.muted, { marginTop: 6 }]}>Address: {privateRow.address ?? "—"}</Text>
+              </GlassCard>
+            ) : null}
             <GlassCard>
               <Text style={styles.section}>About</Text>
               <Text style={styles.muted}>Trust profile is powered by marketplace activity and peer reviews.</Text>
             </GlassCard>
             <Text style={styles.section}>Reviews</Text>
+            {profileRestricted ? (
+              <Text style={[styles.muted, { marginBottom: 8 }]}>
+                Peer reviews are hidden here to reduce exposure after a completed delivery.
+              </Text>
+            ) : null}
           </View>
         }
         renderItem={({ item }) => (
@@ -110,6 +174,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.18)",
   },
+  avatarImg: { width: 52, height: 52, borderRadius: 18, backgroundColor: "rgba(0,0,0,0.2)" },
   avatarText: { color: "white", fontWeight: "900", fontSize: 18 },
   name: { color: "white", fontSize: 20, fontWeight: "900" },
   muted: { color: "rgba(255,255,255,0.65)", marginTop: 6, fontWeight: "600", lineHeight: 18 },

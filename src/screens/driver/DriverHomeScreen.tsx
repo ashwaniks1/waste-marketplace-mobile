@@ -38,7 +38,7 @@ export function DriverHomeScreen() {
   const { state } = useSession();
   const userId = state.status === "signed_in" ? state.session.user.id : null;
 
-  const [tab, setTab] = useState<"available" | "mine">("available");
+  const [tab, setTab] = useState<"available" | "accepted">("available");
   const [items, setItems] = useState<PublicListingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +48,7 @@ export function DriverHomeScreen() {
   const [defaultPct, setDefaultPct] = useState<number>(10);
   const [ratings, setRatings] = useState<Record<string, { avg: number; count: number }>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -142,6 +143,12 @@ export function DriverHomeScreen() {
     return mapped;
   }, [defaultPct, items, miles, point, sort]);
 
+  const filterSummary = useMemo(() => {
+    const mileLabel = MILES.find((m) => m.value === miles)?.label ?? "Any";
+    const ord = sort === "nearest" ? "Nearest" : sort === "payout" ? "Payout" : "Newest";
+    return `${mileLabel} · ${ord}`;
+  }, [miles, sort]);
+
   async function claim(row: PublicListingRow) {
     if (!userId) return;
     setBusyId(row.id);
@@ -167,39 +174,52 @@ export function DriverHomeScreen() {
     <GradientScreen>
       <View style={{ paddingHorizontal: 16, paddingTop: 10 }}>
         <Text style={styles.title}>Driver pickups</Text>
-        <Text style={styles.sub}>Available jobs match: delivery_required + pickup_job_status = available.</Text>
+        <Text style={styles.sub}>Paid delivery jobs near you. Claim a route, track live, and complete with the buyer PIN.</Text>
       </View>
 
       <View style={styles.segment}>
         <Pressable onPress={() => setTab("available")} style={[styles.segBtn, tab === "available" && styles.segBtnOn]}>
           <Text style={[styles.segText, tab === "available" && styles.segTextOn]}>Available</Text>
         </Pressable>
-        <Pressable onPress={() => setTab("mine")} style={[styles.segBtn, tab === "mine" && styles.segBtnOn]}>
-          <Text style={[styles.segText, tab === "mine" && styles.segTextOn]}>Mine</Text>
+        <Pressable onPress={() => setTab("accepted")} style={[styles.segBtn, tab === "accepted" && styles.segBtnOn]}>
+          <Text style={[styles.segText, tab === "accepted" && styles.segTextOn]}>Accepted</Text>
         </Pressable>
       </View>
 
-      <GlassCard style={{ marginHorizontal: 16, marginBottom: 12 }}>
-        <Text style={styles.cardTitle}>Distance & sort</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 10 }}>
-          {MILES.map((m) => {
-            const active = miles === m.value;
-            return (
-              <Pressable key={m.label} onPress={() => setMiles(m.value)} style={[styles.chip, active && styles.chipActive]}>
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{m.label}</Text>
-              </Pressable>
-            );
-          })}
-          <Pressable onPress={() => setSort("nearest")} style={[styles.chip, sort === "nearest" && styles.chipActive]}>
-            <Text style={[styles.chipText, sort === "nearest" && styles.chipTextActive]}>Nearest</Text>
-          </Pressable>
-          <Pressable onPress={() => setSort("payout")} style={[styles.chip, sort === "payout" && styles.chipActive]}>
-            <Text style={[styles.chipText, sort === "payout" && styles.chipTextActive]}>Payout</Text>
-          </Pressable>
-          <Pressable onPress={() => setSort("newest")} style={[styles.chip, sort === "newest" && styles.chipActive]}>
-            <Text style={[styles.chipText, sort === "newest" && styles.chipTextActive]}>Newest</Text>
-          </Pressable>
-        </ScrollView>
+      <GlassCard style={{ marginHorizontal: 16, marginBottom: 12, paddingVertical: 4 }}>
+        <Pressable
+          onPress={() => setFiltersOpen((o) => !o)}
+          style={styles.filterHeader}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: filtersOpen }}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardTitle}>Distance & payout</Text>
+            {!filtersOpen ? <Text style={styles.filterSummary}>{filterSummary}</Text> : null}
+          </View>
+          <Ionicons name={filtersOpen ? "chevron-up" : "chevron-down"} size={22} color="rgba(255,255,255,0.75)" />
+        </Pressable>
+        {filtersOpen ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 10, paddingBottom: 12 }}>
+            {MILES.map((m) => {
+              const active = miles === m.value;
+              return (
+                <Pressable key={m.label} onPress={() => setMiles(m.value)} style={[styles.chip, active && styles.chipActive]}>
+                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{m.label}</Text>
+                </Pressable>
+              );
+            })}
+            <Pressable onPress={() => setSort("nearest")} style={[styles.chip, sort === "nearest" && styles.chipActive]}>
+              <Text style={[styles.chipText, sort === "nearest" && styles.chipTextActive]}>Nearest</Text>
+            </Pressable>
+            <Pressable onPress={() => setSort("payout")} style={[styles.chip, sort === "payout" && styles.chipActive]}>
+              <Text style={[styles.chipText, sort === "payout" && styles.chipTextActive]}>Payout</Text>
+            </Pressable>
+            <Pressable onPress={() => setSort("newest")} style={[styles.chip, sort === "newest" && styles.chipActive]}>
+              <Text style={[styles.chipText, sort === "newest" && styles.chipTextActive]}>Newest</Text>
+            </Pressable>
+          </ScrollView>
+        ) : null}
       </GlassCard>
 
       {loading ? <Text style={styles.center}>Loading…</Text> : null}
@@ -226,6 +246,7 @@ export function DriverHomeScreen() {
                 sellerRating={rating}
                 estPayout={payout}
                 busy={busyId === item.id}
+                onOpenDetail={() => navigation.navigate("ListingDetail", { id: item.id })}
                 onAccept={() => void claim(item)}
               />
             );
@@ -268,6 +289,14 @@ const styles = StyleSheet.create({
   segText: { textAlign: "center", color: "rgba(255,255,255,0.75)", fontWeight: "900" },
   segTextOn: { color: "white" },
   cardTitle: { color: "white", fontWeight: "900" },
+  filterHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+  filterSummary: { color: "rgba(255,255,255,0.55)", marginTop: 6, fontWeight: "700", fontSize: 12 },
   chip: {
     paddingHorizontal: 12,
     paddingVertical: 8,

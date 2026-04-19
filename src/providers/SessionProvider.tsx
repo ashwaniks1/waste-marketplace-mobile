@@ -1,5 +1,5 @@
 import { type Session } from "@supabase/supabase-js";
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { normalizeRole, type UserRole } from "../types/roles";
 
@@ -15,9 +15,12 @@ type SessionState =
 const SessionContext = createContext<{
   state: SessionState;
   signOut: () => Promise<void>;
+  /** Re-read role from public.users (e.g. after client inserts a missing profile row). */
+  refreshRole: () => Promise<void>;
 }>({
   state: { status: "loading" },
   signOut: async () => {},
+  refreshRole: async () => {},
 });
 
 async function fetchUserRole(userId: string): Promise<UserRole | null> {
@@ -35,6 +38,14 @@ async function fetchUserRole(userId: string): Promise<UserRole | null> {
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<SessionState>({ status: "loading" });
+
+  const refreshRole = useCallback(async () => {
+    const { data } = await supabase.auth.getSession();
+    const session = data.session ?? null;
+    if (!session) return;
+    const role = await fetchUserRole(session.user.id);
+    setState({ status: "signed_in", session, role });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,8 +87,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       signOut: async () => {
         await supabase.auth.signOut();
       },
+      refreshRole,
     }),
-    [state],
+    [state, refreshRole],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
